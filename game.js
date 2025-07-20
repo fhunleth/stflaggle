@@ -84,6 +84,8 @@ class StateFlagleGame {
     makeGuess() {
         if (this.gameOver || !this.stateSelect.value) return;
 
+        console.log('Making guess:', this.stateSelect.value); // Debug log
+
         const guessedState = this.stateSelect.value;
         const isCorrect = guessedState === this.currentTarget;
 
@@ -128,6 +130,8 @@ class StateFlagleGame {
 
         // Add color matching overlay if incorrect
         if (!isCorrect) {
+            // Create the overlay and add it to the container
+            // The overlay will handle its own async loading and comparison
             const overlay = this.createColorMatchOverlay(guessedState, this.currentTarget);
             flagContainer.appendChild(overlay);
         }
@@ -156,42 +160,200 @@ class StateFlagleGame {
     }
 
     createColorMatchOverlay(guessedState, targetState) {
-        const overlay = document.createElement('div');
+        console.log('Creating pixel-by-pixel overlay for:', guessedState, 'vs', targetState);
+        
+        // Create a canvas overlay for pixel-by-pixel comparison
+        const overlay = document.createElement('canvas');
         overlay.className = 'guess-flag-overlay';
+        overlay.style.position = 'absolute';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100%';
+        overlay.style.height = '100%';
+        overlay.style.pointerEvents = 'none';
 
-        // Compare colors between guessed and target flags
-        const guessedColors = GAME_FLAGS[guessedState].colors;
-        const targetColors = GAME_FLAGS[targetState].colors;
+        // Set canvas size to match the flag container
+        const canvasWidth = 80; // Match .guess-flag width
+        const canvasHeight = 50; // Match .guess-flag height
+        overlay.width = canvasWidth;
+        overlay.height = canvasHeight;
 
-        // Find matching colors
-        const matchingColors = guessedColors.filter(color => targetColors.includes(color));
+        // Get the actual flag images
+        const guessedFlagImg = GAME_FLAGS[guessedState].flagElement;
+        const targetFlagImg = GAME_FLAGS[targetState].flagElement;
 
-        // Create visual feedback based on color matches
-        if (matchingColors.length > 0) {
-            // Create green overlay pattern to indicate color matches
-            // The pattern intensity could represent the percentage of matching colors
-            const matchPercentage = matchingColors.length / Math.max(guessedColors.length, targetColors.length);
-
-            // Create a pattern that shows green where colors match
-            overlay.style.background = `repeating-linear-gradient(
-                45deg,
-                rgba(106, 170, 100, 0.8) 0px,
-                rgba(106, 170, 100, 0.8) ${Math.max(5, matchPercentage * 20)}px,
-                transparent ${Math.max(5, matchPercentage * 20)}px,
-                transparent ${Math.max(10, matchPercentage * 40)}px
-            )`;
-        } else {
-            // No matching colors - show subtle gray pattern
-            overlay.style.background = `repeating-linear-gradient(
-                45deg,
-                rgba(120, 124, 126, 0.3) 0px,
-                rgba(120, 124, 126, 0.3) 10px,
-                transparent 10px,
-                transparent 20px
-            )`;
-        }
+        // Wait for both images to load, then perform pixel comparison
+        this.waitForImagesAndCompare(overlay, guessedFlagImg, targetFlagImg, canvasWidth, canvasHeight);
 
         return overlay;
+    }
+
+    waitForImagesAndCompare(canvas, guessedImg, targetImg, width, height) {
+        const performComparison = () => {
+            try {
+                this.comparePixels(canvas, guessedImg, targetImg, width, height);
+            } catch (error) {
+                console.log('Pixel comparison failed, using fallback pattern:', error);
+                // Fallback to simple pattern if pixel comparison fails
+                this.createFallbackPattern(canvas);
+            }
+        };
+
+        // Check if both images are loaded
+        if (guessedImg.complete && guessedImg.naturalWidth > 0 && 
+            targetImg.complete && targetImg.naturalWidth > 0) {
+            performComparison();
+        } else {
+            // Wait for images to load
+            let loadedCount = 0;
+            const checkLoaded = () => {
+                loadedCount++;
+                if (loadedCount === 2) {
+                    performComparison();
+                }
+            };
+
+            if (!guessedImg.complete) {
+                guessedImg.onload = checkLoaded;
+            } else {
+                checkLoaded();
+            }
+
+            if (!targetImg.complete) {
+                targetImg.onload = checkLoaded;
+            } else {
+                checkLoaded();
+            }
+
+            // Timeout fallback
+            setTimeout(() => {
+                if (!guessedImg.complete || !targetImg.complete) {
+                    console.log('Image loading timeout, using fallback');
+                    this.createFallbackPattern(canvas);
+                }
+            }, 3000);
+        }
+    }
+
+    comparePixels(canvas, guessedImg, targetImg, width, height) {
+        const ctx = canvas.getContext('2d');
+        
+        // Create temporary canvases for each flag
+        const guessedCanvas = document.createElement('canvas');
+        const targetCanvas = document.createElement('canvas');
+        guessedCanvas.width = targetCanvas.width = width;
+        guessedCanvas.height = targetCanvas.height = height;
+        
+        const guessedCtx = guessedCanvas.getContext('2d');
+        const targetCtx = targetCanvas.getContext('2d');
+        
+        // Draw both flag images to their respective canvases
+        guessedCtx.drawImage(guessedImg, 0, 0, width, height);
+        targetCtx.drawImage(targetImg, 0, 0, width, height);
+        
+        // Get pixel data from both canvases
+        const guessedData = guessedCtx.getImageData(0, 0, width, height);
+        const targetData = targetCtx.getImageData(0, 0, width, height);
+        
+        // Create overlay image data
+        const overlayData = ctx.createImageData(width, height);
+        
+        // Compare each pixel
+        for (let i = 0; i < guessedData.data.length; i += 4) {
+            const guessedR = guessedData.data[i];
+            const guessedG = guessedData.data[i + 1];
+            const guessedB = guessedData.data[i + 2];
+            
+            const targetR = targetData.data[i];
+            const targetG = targetData.data[i + 1];
+            const targetB = targetData.data[i + 2];
+            
+            // Check if colors are similar (within tolerance)
+            if (this.colorsAreSimilar(guessedR, guessedG, guessedB, targetR, targetG, targetB)) {
+                // Set green color for matching pixels
+                overlayData.data[i] = 106;     // Red component (green color)
+                overlayData.data[i + 1] = 170; // Green component
+                overlayData.data[i + 2] = 100; // Blue component
+                overlayData.data[i + 3] = 200; // Alpha (semi-transparent)
+            } else {
+                // Set transparent for non-matching pixels
+                overlayData.data[i] = 0;
+                overlayData.data[i + 1] = 0;
+                overlayData.data[i + 2] = 0;
+                overlayData.data[i + 3] = 0;
+            }
+        }
+        
+        // Draw the overlay
+        ctx.putImageData(overlayData, 0, 0);
+        console.log('Pixel comparison completed successfully');
+    }
+
+    colorsAreSimilar(r1, g1, b1, r2, g2, b2) {
+        // Convert RGB to HSL for better color comparison
+        const hsl1 = this.rgbToHsl(r1, g1, b1);
+        const hsl2 = this.rgbToHsl(r2, g2, b2);
+        
+        // Define tolerance for similarity
+        const hueTolerance = 40; // degrees (out of 360) - slightly more lenient
+        const satTolerance = 0.4; // percentage (out of 1)
+        const lightTolerance = 0.4; // percentage (out of 1)
+        
+        // Calculate differences
+        let hueDiff = Math.abs(hsl1[0] - hsl2[0]);
+        // Handle hue wraparound (e.g., 350° and 10° are close)
+        if (hueDiff > 180) hueDiff = 360 - hueDiff;
+        
+        const satDiff = Math.abs(hsl1[1] - hsl2[1]);
+        const lightDiff = Math.abs(hsl1[2] - hsl2[2]);
+        
+        // Special case for very low saturation (near grayscale)
+        if (hsl1[1] < 0.15 && hsl2[1] < 0.15) {
+            // For grayscale colors, only compare lightness
+            return lightDiff < lightTolerance;
+        }
+        
+        // Colors are similar if all components are within tolerance
+        return hueDiff < hueTolerance && satDiff < satTolerance && lightDiff < lightTolerance;
+    }
+
+    rgbToHsl(r, g, b) {
+        r /= 255;
+        g /= 255;
+        b /= 255;
+        
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        let h, s, l = (max + min) / 2;
+        
+        if (max === min) {
+            h = s = 0; // achromatic
+        } else {
+            const d = max - min;
+            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+            
+            switch (max) {
+                case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                case g: h = (b - r) / d + 2; break;
+                case b: h = (r - g) / d + 4; break;
+            }
+            h /= 6;
+        }
+        
+        return [h * 360, s, l];
+    }
+
+    createFallbackPattern(canvas) {
+        // Create a simple pattern as fallback
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = 'rgba(106, 170, 100, 0.6)';
+        
+        // Create diagonal stripes pattern
+        for (let i = 0; i < canvas.width + canvas.height; i += 20) {
+            ctx.fillRect(i - canvas.height, 0, 10, canvas.height);
+        }
+        
+        console.log('Using fallback pattern overlay');
     }
 
     handleWin() {

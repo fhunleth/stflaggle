@@ -357,6 +357,7 @@ function createFlagElement(flagData) {
     // Create an image element to display the actual flag
     const flagImg = document.createElement('img');
     flagImg.className = 'flag-image';
+    flagImg.crossOrigin = 'anonymous'; // Enable CORS for canvas operations
     flagImg.src = flagData.imageUrl;
     flagImg.alt = `Flag of ${flagData.name}`;
     flagImg.style.width = '100%';
@@ -366,6 +367,7 @@ function createFlagElement(flagData) {
 
     // Add error handling in case the image fails to load
     flagImg.onerror = function() {
+        console.log('Failed to load image for', flagData.name, 'using fallback');
         // Fallback to CSS gradient if image fails to load
         const fallbackDiv = document.createElement('div');
         fallbackDiv.className = 'generated-flag';
@@ -386,6 +388,11 @@ function createFlagElement(flagData) {
 
         // Replace the failed image with the fallback
         this.parentNode.replaceChild(fallbackDiv, this);
+    };
+
+    // Add success handler for debugging
+    flagImg.onload = function() {
+        console.log('Successfully loaded image for', flagData.name);
     };
 
     return flagImg;
