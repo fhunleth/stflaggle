@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>State Flagle - Guess the US State Flag</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>State Flagle</h1>
+            <p>Guess the US state or territory flag!</p>
+        </header>
+
+        <div class="game-container">
+            <div class="target-flag-container">
+                <h3>Target Flag</h3>
+                <div class="flag-display" id="targetFlag">
+                    <div class="flag-placeholder">Flag will be revealed when you win!</div>
+                </div>
+            </div>
+
+            <div class="guess-section">
+                <div class="guess-input">
+                    <select id="stateSelect">
+                        <option value="">Select a state or territory...</option>
+                    </select>
+                    <button id="guessBtn">Guess</button>
+                </div>
+
+                <div class="guesses-container">
+                    <h3>Your Guesses</h3>
+                    <div id="guessList"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="game-status" id="gameStatus"></div>
+
+        <div class="controls">
+            <button id="newGameBtn" style="display: none;">Play Again</button>
+        </div>
+    </div>
+
+    <script src="flags.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
